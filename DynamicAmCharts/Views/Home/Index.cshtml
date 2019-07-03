@@ -1,0 +1,141 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+}
+
+<div id="chartData"></div>
+@Scripts.Render("~/bundles/jquery")
+<script src="https://www.amcharts.com/lib/4/core.js"></script>
+<script src="https://www.amcharts.com/lib/4/charts.js"></script>
+<script src="https://www.amcharts.com/lib/4/plugins/forceDirected.js"></script>
+<script src="https://www.amcharts.com/lib/4/themes/animated.js"></script>
+
+<script>
+    $(document).ready(function () {
+        $.ajax({
+            url: 'https://api.myjson.com/bins/zg8of',
+            method: 'GET',
+            success: function (data) {
+                generateChart(data);
+            },
+            error: function (err) {
+                alert("Unable to display chart. Something went wrong.");
+            }
+        });
+        function generateChart(data, iteration = 0) {
+            var dates = [];
+            var newData = [];
+            var gr = [];
+            function groupBy(array, f) {
+                var groups = {};
+                array.forEach(function (o) {
+                    var group = JSON.stringify(f(o));
+                    groups[group] = groups[group] || [];
+                    groups[group].push(o);
+                });
+                return Object.keys(groups).map(function (group) {
+                    return groups[group];
+                })
+            }
+            var result = groupBy(data, function (item) {
+                return ([item.Name]);
+            });
+            $.each(result, function (a, b) {
+                var d1 = b.map(function (i) {
+                    return i.Month;
+                });
+                $.extend(true, dates, d1);
+            });
+
+            $.each(dates, function (a, b) {
+                var item = { sales_figure: b };
+                $.each(result, function (i, c) {
+                    el = c.filter(function (e) {
+                        return e.Month == b;
+                    });
+                    if (el && el.length > 0) {
+                        item[c[i].Name.toUpperCase()] = el[0].Sales_Figure;
+                        if (gr.filter(function (g) {
+                            return g == c[i].Name.toUpperCase();
+                        }).length <= 0) {
+                            gr.push(c[i].Name.toUpperCase());
+                        }
+                    }
+                });
+                if (Object.keys(item).length > 1)
+                    newData.push(item);
+            });
+
+            $chartData = $('#chartData');
+
+            var am_el = $('<div id="dc-' + iteration + '" class="col-md-12 col-xs-12 card-item">');
+            am_el.append($('<div class="lgnd col-md-12 col-xs-12 bb2"><div id="l-' + iteration + '" class="col-md-12 col-xs-12"></div></div>'));
+            am_el.append($('<div id="c-' + iteration + '" class="col-md-12 col-xs-12"  style="min-height:250px ;   margin-left: -8px;">'));
+            $chartData.html(am_el);
+
+            var chart = am4core.create("c-" + iteration, am4charts.XYChart);
+            am4core.options.minPolylineStep = Math.ceil(newData.length / 50);
+            am4core.options.commercialLicense = true;
+            am4core.animationDuration = 0;
+            chart.data = newData;
+
+            var categoryAxis = chart.xAxes.push(new am4charts.CategoryAxis());
+            categoryAxis.dataFields.category = "sales_figure";
+            categoryAxis.renderer.minGridDistance = 70;
+            categoryAxis.fontSize = 12;
+
+            var valueAxis = chart.yAxes.push(new am4charts.ValueAxis());
+            valueAxis.fontSize = 12;
+            valueAxis.title.text = "Sales Figure";
+
+            chart.legend = new am4charts.Legend();
+            chart.legend.position = "top";
+            chart.legend.fontSize = 12;
+
+            var markerTemplate = chart.legend.markers.template;
+            markerTemplate.width = 10;
+            markerTemplate.height = 10;
+
+            var legendContainer = am4core.create("l-" + iteration, am4core.Container);
+            legendContainer.width = am4core.percent(100);
+            chart.legend.parent = legendContainer;
+
+            var legendDiv = document.getElementById("l-" + iteration);
+            function resizeLegendDiv() {
+                legendDiv.style.height = chart.legend.measuredHeight + "px";
+                legendDiv.style.overflow = "hidden";
+            }
+
+            chart.legend.events.on('inited', resizeLegendDiv);
+
+            chart.colors.list = [am4core.color("#0D8ECF"), am4core.color("#FF6600"), am4core.color("#FCD202"), am4core.color("#B0DE09"), am4core.color("#2A0CD0"), am4core.color("#CD0D74"), am4core.color("#CC0000"), am4core.color("#00CC00"), am4core.color('#ffd8b1'), am4core.color("#990000"), am4core.color('#4363d8'), am4core.color('#e6194b'), am4core.color('#3cb44b'), am4core.color('#ffe119'), am4core.color('#f58231'), am4core.color('#911eb4'), am4core.color('#46f0f0'), am4core.color('#f032e6'), am4core.color('#bcf60c'), am4core.color('#fabebe'), am4core.color('#008080'), am4core.color('#e6beff'), am4core.color('#9a6324'), am4core.color('#fffac8'), am4core.color('#800000'), am4core.color('#aaffc3'), am4core.color('#808000'), am4core.color('#ffd8b1'), am4core.color('#000075')]
+
+            $.each(gr, function (l, d) {
+
+                var series = chart.series.push(new am4charts.LineSeries());
+                series.dataFields.valueY = d;
+                series.name = d;
+                series.dataFields.categoryX = "sales_figure";
+                series.tooltipText = "{name}: [bold]{valueY}[/]";
+                series.strokeWidth = 2;
+                series.minBulletDistance = 30;
+                series.tensionX = 0.7;
+                series.legendSettings.labelText = "[bold]" + "{name}";
+
+                var bullet = series.bullets.push(new am4charts.CircleBullet());
+                bullet.circle.strokeWidth = 2;
+                bullet.circle.radius = 3;
+                bullet.circle.fill = am4core.color("#fff");
+
+                var bullethover = bullet.states.create("hover");
+                bullethover.properties.scale = 1.2;
+                chart.cursor = new am4charts.XYCursor();
+                chart.cursor.behavior = "panXY";
+                chart.cursor.snapToSeries = series;
+
+            });
+
+            chart.scrollbarX = new am4core.Scrollbar();
+            chart.scrollbarX.parent = chart.bottomAxesContainer;
+        }
+    });
+</script>
